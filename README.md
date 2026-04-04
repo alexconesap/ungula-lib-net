@@ -2,25 +2,22 @@
 
 Networking library for ESP32 projects. WiFi AP management, HTTP+WebSocket server, and HTTP client — all built on ESP-IDF, no Arduino networking dependencies.
 
-The library is modular: you only pay for what you enable. A node that just needs WiFi AP for ESP-NOW gets zero HTTP code in its binary.
+The library compiles all components when `ESP_PLATFORM` is defined. The host project controls what it uses through its own `#include` directives and project-level guards — the library does not impose feature flags.
 
 ## Compile flags
 
 | Flag | What it enables | Who needs it |
 | --- | --- | --- |
 | `ESP_PLATFORM` | ESP-IDF implementations (WiFi, httpd, esp_http_client) | All ESP32 nodes |
-| `ENABLE_HTTP_SERVER` | HTTP+WebSocket server and HTTP client | Nodes with a web UI or REST API |
 | `ENABLE_WIFI_STA` | WiFi STA mode (connect to external routers, scan networks) | Nodes that connect to external WiFi |
 | `CONFIG_HTTPD_STACK` | httpd task stack size in bytes (default 8192) | Override if handlers need more stack |
 
-A typical coordinator node (web UI + REST API + OTA) defines all three. A peripheral node (WiFi AP only for ESP-NOW) defines only `ESP_PLATFORM`.
-
 Example build flags:
 ```
-# Coordinator (ICB): full networking stack
--DESP_PLATFORM -DENABLE_HTTP_SERVER -DENABLE_WIFI_STA
+# Full networking stack
+-DESP_PLATFORM -DENABLE_WIFI_STA
 
-# Peripheral (RBB1/RBB2): WiFi AP only, no HTTP
+# WiFi AP only (no STA)
 -DESP_PLATFORM
 ```
 
@@ -53,7 +50,7 @@ if (wifi_ap_init(config)) {
 
 ## HTTP + WebSocket Server
 
-*Requires `-DENABLE_HTTP_SERVER`*
+*Requires `-DESP_PLATFORM`*
 
 A unified HTTP and WebSocket server built on ESP-IDF `httpd`. One server, one port, both REST routes and WebSocket on the same instance. No Arduino WebServer dependency.
 
@@ -171,7 +168,7 @@ Max 40 routes, 4 WebSocket clients.
 
 ## HTTP Client
 
-*Requires `-DENABLE_HTTP_SERVER`*
+*Requires `-DESP_PLATFORM`*
 
 Simple GET and POST requests for pushing data to cloud APIs or fetching remote resources.
 

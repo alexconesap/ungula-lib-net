@@ -3,7 +3,7 @@
 
 // HTTP + WebSocket server implementation using ESP-IDF httpd.
 
-#if defined(ESP_PLATFORM) && defined(ENABLE_HTTP_SERVER)
+#if defined(ESP_PLATFORM)
 
 #include "http_server.h"
 
@@ -433,4 +433,4 @@ namespace ungula {
   }  // namespace http
 }  // namespace ungula
 
-#endif  // ESP_PLATFORM && ENABLE_HTTP_SERVER
+#endif  // ESP_PLATFORM

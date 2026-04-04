@@ -20,8 +20,6 @@
 #include "wifi/wifi_sta.h"
 #endif
 
-// HTTP + WebSocket server (only for nodes that serve a web UI)
-#ifdef ENABLE_HTTP_SERVER
+// HTTP server and client
 #include "http/http_client.h"
 #include "http/http_server.h"
-#endif

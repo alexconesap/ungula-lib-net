@@ -37,7 +37,7 @@ namespace ungula {
         if (WiFi.status() == WL_CONNECTED) {
           IPAddress ip = WiFi.localIP();
           snprintf(s_sta_ip, sizeof(s_sta_ip), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-          log_info("WiFi STA: connected, IP=%s", s_sta_ip);
+          log_info("WiFi STA: connected, IP=%s, channel=%d", s_sta_ip, WiFi.channel());
           return true;
         }
         TimeControl::delay(250);

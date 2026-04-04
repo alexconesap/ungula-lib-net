@@ -8,7 +8,7 @@
 // =============================================================================
 // ESP-IDF implementation
 // =============================================================================
-#if defined(ESP_PLATFORM) && defined(ENABLE_HTTP_SERVER)
+#if defined(ESP_PLATFORM)
 
 #include <esp_crt_bundle.h>
 #include <esp_http_client.h>
