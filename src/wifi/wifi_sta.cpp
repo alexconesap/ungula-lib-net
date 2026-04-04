@@ -4,8 +4,6 @@
 
 // WiFi STA (station) — pure ESP-IDF, no Arduino dependency.
 
-#ifdef ENABLE_WIFI_STA
-
 #include "wifi_sta.h"
 
 #include <esp_event.h>
@@ -22,6 +20,48 @@ namespace ungula {
   namespace wifi {
 
     static char s_sta_ip[16] = "0.0.0.0";
+    static bool s_sta_initialized = false;
+
+    bool wifi_sta_init() {
+      if (s_sta_initialized) {
+        return true;
+      }
+
+      // Initialize TCP/IP stack and event loop
+      esp_netif_init();
+      esp_event_loop_create_default();
+      esp_netif_create_default_wifi_sta();
+
+      // Clean up any leftover state from a previous boot
+      esp_wifi_disconnect();
+      esp_wifi_stop();
+      esp_wifi_deinit();
+
+      // Initialize WiFi
+      wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+      esp_err_t err = esp_wifi_init(&cfg);
+      if (err != ESP_OK) {
+        log_error("esp_wifi_init failed: %s", esp_err_to_name(err));
+        return false;
+      }
+
+      esp_wifi_set_storage(WIFI_STORAGE_RAM);
+
+      err = esp_wifi_set_mode(WIFI_MODE_STA);
+      if (err != ESP_OK) {
+        log_error("esp_wifi_set_mode(STA) failed: %s", esp_err_to_name(err));
+        return false;
+      }
+
+      err = esp_wifi_start();
+      if (err != ESP_OK) {
+        log_error("esp_wifi_start failed: %s", esp_err_to_name(err));
+        return false;
+      }
+
+      s_sta_initialized = true;
+      return true;
+    }
 
     // Event group for blocking connect
     static EventGroupHandle_t s_wifi_event_group = nullptr;
@@ -44,15 +84,17 @@ namespace ungula {
     }
 
     static void ensure_event_handler() {
+      if (!s_wifi_event_group) {
+        s_wifi_event_group = xEventGroupCreate();
+      }
       if (!s_event_handler_registered) {
-        if (!s_wifi_event_group) {
-          s_wifi_event_group = xEventGroupCreate();
-        }
         esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &wifi_event_handler,
                                    nullptr);
         esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, nullptr);
         s_event_handler_registered = true;
       }
+      // Always clear stale bits from a previous session/attempt
+      xEventGroupClearBits(s_wifi_event_group, CONNECTED_BIT | FAIL_BIT);
     }
 
     bool wifi_sta_connect(const WifiStaConfig& config) {
@@ -78,32 +120,41 @@ namespace ungula {
         return false;
       }
 
-      // Clear event bits and connect
-      xEventGroupClearBits(s_wifi_event_group, CONNECTED_BIT | FAIL_BIT);
-      err = esp_wifi_connect();
-      if (err != ESP_OK) {
-        log_error("esp_wifi_connect failed: %s", esp_err_to_name(err));
-        return false;
-      }
-
-      // Wait for connection or timeout
-      EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, CONNECTED_BIT | FAIL_BIT, pdTRUE,
-                                             pdFALSE, pdMS_TO_TICKS(config.connectTimeoutMs));
-
-      if (bits & CONNECTED_BIT) {
-        // Read IP
-        esp_netif_t* sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-        if (sta_netif) {
-          esp_netif_ip_info_t ip_info;
-          if (esp_netif_get_ip_info(sta_netif, &ip_info) == ESP_OK) {
-            snprintf(s_sta_ip, sizeof(s_sta_ip), IPSTR, IP2STR(&ip_info.ip));
-          }
+      // Retry up to 2 times — ESP-IDF STA can fail on the first attempt at boot
+      // if the WiFi stack isn't fully ready yet.
+      static constexpr int MAX_ATTEMPTS = 2;
+      for (int attempt = 0; attempt < MAX_ATTEMPTS; ++attempt) {
+        xEventGroupClearBits(s_wifi_event_group, CONNECTED_BIT | FAIL_BIT);
+        err = esp_wifi_connect();
+        if (err != ESP_OK) {
+          log_error("esp_wifi_connect failed: %s", esp_err_to_name(err));
+          return false;
         }
-        return true;
+
+        EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, CONNECTED_BIT | FAIL_BIT,
+                                               pdTRUE, pdFALSE,
+                                               pdMS_TO_TICKS(config.connectTimeoutMs));
+
+        if (bits & CONNECTED_BIT) {
+          esp_netif_t* sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+          if (sta_netif) {
+            esp_netif_ip_info_t ip_info;
+            if (esp_netif_get_ip_info(sta_netif, &ip_info) == ESP_OK) {
+              snprintf(s_sta_ip, sizeof(s_sta_ip), IPSTR, IP2STR(&ip_info.ip));
+            }
+          }
+          return true;
+        }
+
+        // First attempt failed — disconnect cleanly and retry
+        esp_wifi_disconnect();
+        if (attempt < MAX_ATTEMPTS - 1) {
+          log_warn("WiFi STA: attempt %d failed, retrying...", attempt + 1);
+          TimeControl::delay(500);
+        }
       }
 
       log_error("WiFi STA: connection to '%s' timed out", config.ssid);
-      esp_wifi_disconnect();
       return false;
     }
 
@@ -136,11 +187,11 @@ namespace ungula {
       return "0.0.0.0";
     }
 
-    uint8_t wifi_sta_get_channel() {
+    WifiChannel wifi_sta_get_channel() {
       uint8_t primary = 0;
       wifi_second_chan_t second = WIFI_SECOND_CHAN_NONE;
       esp_wifi_get_channel(&primary, &second);
-      return primary;
+      return static_cast<WifiChannel>(primary);
     }
 
     /// Check if an SSID matches any of the given prefixes.
@@ -217,5 +268,3 @@ namespace ungula {
 
   }  // namespace wifi
 }  // namespace ungula
-
-#endif  // ENABLE_WIFI_STA

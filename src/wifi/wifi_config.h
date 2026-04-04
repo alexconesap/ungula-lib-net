@@ -21,7 +21,6 @@
  */
 
 #pragma once
-#ifdef ENABLE_WIFI_STA
 
 #include <preferences/core/i_preferences.h>
 
@@ -79,5 +78,3 @@ namespace ungula {
 
   }  // namespace wifi
 }  // namespace ungula
-
-#endif  // ENABLE_WIFI_STA

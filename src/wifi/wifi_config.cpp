@@ -7,8 +7,6 @@
  * @brief WiFi STA credentials persistence — NVS load/save/clear with CRC32.
  */
 
-#ifdef ENABLE_WIFI_STA
-
 #include "wifi_config.h"
 
 #include <logger.h>
@@ -81,5 +79,3 @@ namespace ungula {
 
   }  // namespace wifi
 }  // namespace ungula
-
-#endif  // ENABLE_WIFI_STA

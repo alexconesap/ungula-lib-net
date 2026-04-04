@@ -9,15 +9,11 @@ The library compiles all components when `ESP_PLATFORM` is defined. The host pro
 | Flag | What it enables | Who needs it |
 | --- | --- | --- |
 | `ESP_PLATFORM` | ESP-IDF implementations (WiFi, httpd, esp_http_client) | All ESP32 nodes |
-| `ENABLE_WIFI_STA` | WiFi STA mode (connect to external routers, scan networks) | Nodes that connect to external WiFi |
 | `CONFIG_HTTPD_STACK` | httpd task stack size in bytes (default 8192) | Override if handlers need more stack |
 
 Example build flags:
-```
-# Full networking stack
--DESP_PLATFORM -DENABLE_WIFI_STA
 
-# WiFi AP only (no STA)
+```text
 -DESP_PLATFORM
 ```
 
@@ -47,6 +43,29 @@ if (wifi_ap_init(config)) {
 | `wifi_ap_get_ip()` | `const char*` | AP IP address |
 | `wifi_ap_is_active()` | `bool` | Whether AP is running |
 | `wifi_ap_get_channel()` | `WifiChannel` | Effective channel in use |
+
+## ESP-NOW Initialization
+
+For nodes that only need ESP-NOW (no web server, no AP), use `wifi_espnow_init()` to bring up the WiFi radio in STA mode -- the minimum required for ESP-NOW to work.
+
+```cpp
+#include <wifi/wifi_espnow.h>
+
+using namespace ungula::wifi;
+
+void setup() {
+    if (!wifi_espnow_init()) {
+        // handle error
+    }
+    // ESP-NOW transport is now ready to use
+}
+```
+
+| Function | Returns | Description |
+| --- | --- | --- |
+| `wifi_espnow_init()` | `bool` | Initialize WiFi in STA mode for ESP-NOW only |
+
+No AP is started, no HTTP server, no web UI. This is the right choice for headless nodes that communicate exclusively via ESP-NOW.
 
 ## HTTP + WebSocket Server
 
@@ -160,7 +179,7 @@ The WebSocket is broadcast-only — the server ignores incoming messages from cl
 
 The httpd task stack defaults to 8192 bytes (`CONFIG_HTTPD_STACK`). If your handlers build large JSON on the stack, you can increase it via build flags:
 
-```
+```text
 -DCONFIG_HTTPD_STACK=12288
 ```
 
@@ -257,7 +276,7 @@ cd tests
 
 ## Dependencies
 
-Requires [UngulaGenericLib](https://github.com/alexconesap/UngulaGenericLib) (`lib/`) for the logger and `WifiChannel` enum.
+Requires [UngulaGenericLib](https://github.com/alexconesap/ungula-lib.git) (`lib/`) for the logger and `WifiChannel` enum.
 
 ```text
 your_project/

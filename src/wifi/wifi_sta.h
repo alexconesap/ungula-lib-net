@@ -17,9 +17,9 @@
  */
 
 #pragma once
-#ifdef ENABLE_WIFI_STA
 
 #include <cstdint>
+#include <wifi/wifi_channel.h>
 
 namespace ungula {
   namespace wifi {
@@ -44,6 +44,12 @@ namespace ungula {
     /// Maximum networks returned by a single scan
     static constexpr uint8_t WIFI_MAX_SCAN_RESULTS = 16;
 
+    /// Initialize WiFi in STA-only mode (no AP).
+    /// Call this instead of wifi_ap_init() for nodes that don't serve a web UI
+    /// but still need ESP-NOW and optional STA connectivity.
+    /// @return true on success
+    bool wifi_sta_init();
+
     /// Connect STA interface to an external WiFi router.
     /// Blocks until connected and IP obtained, or timeout.
     /// @param config Connection parameters (SSID, password, timeout)
@@ -63,8 +69,8 @@ namespace ungula {
     const char* wifi_sta_get_ip();
 
     /// Get the current WiFi channel.
-    /// @return channel number (1-13), or 0 if not available
-    uint8_t wifi_sta_get_channel();
+    /// @return WifiChannel (Ch1-Ch13), or ChAuto if not available
+    WifiChannel wifi_sta_get_channel();
 
     /// Scan for available WiFi networks.
     /// @param results Output array to fill with scan results
@@ -77,5 +83,3 @@ namespace ungula {
 
   }  // namespace wifi
 }  // namespace ungula
-
-#endif  // ENABLE_WIFI_STA

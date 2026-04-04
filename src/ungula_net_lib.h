@@ -14,11 +14,9 @@
 // WiFi AP
 #include "wifi/wifi_ap.h"
 
-// WiFi STA (station mode)
-#ifdef ENABLE_WIFI_STA
+// WiFi STA (station mode — connect to routers, scan, ESP-NOW init)
 #include "wifi/wifi_config.h"
 #include "wifi/wifi_sta.h"
-#endif
 
 // HTTP server and client
 #include "http/http_client.h"

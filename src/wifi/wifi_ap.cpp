@@ -42,6 +42,13 @@ namespace ungula {
         s_netif_initialized = true;
       }
 
+      // Clean up any leftover WiFi state from a previous boot/session.
+      // On soft reboot the radio hardware may retain state — disconnect, stop,
+      // and deinit first to ensure a clean start. Errors are expected on first boot.
+      esp_wifi_disconnect();
+      esp_wifi_stop();
+      esp_wifi_deinit();
+
       // Initialize WiFi with default config
       wifi_init_config_t wifi_init_cfg = WIFI_INIT_CONFIG_DEFAULT();
       esp_err_t err = esp_wifi_init(&wifi_init_cfg);
