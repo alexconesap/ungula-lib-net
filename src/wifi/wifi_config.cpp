@@ -39,7 +39,6 @@ namespace ungula {
       prefs_.end();
 
       if (read != sizeof(blob)) {
-        log_info("No WiFi config in NVS (%s), using defaults", ns_);
         return config;
       }
 
@@ -53,8 +52,6 @@ namespace ungula {
       config.ssid[WIFI_SSID_MAX_LEN - 1] = '\0';
       config.password[WIFI_PASS_MAX_LEN - 1] = '\0';
 
-      log_debug("WiFi config loaded (%s): enabled=%d, ssid='%s'", ns_, config.enabled ? 1 : 0,
-                config.ssid);
       return config;
     }
 
@@ -71,9 +68,6 @@ namespace ungula {
         log_error("Failed to write WiFi config to NVS (%s)", ns_);
       }
       prefs_.end();
-
-      log_info("WiFi config saved (%s): enabled=%d, ssid='%s'", ns_, config.enabled ? 1 : 0,
-               config.ssid);
     }
 
     void WifiConfigStore::clear() {
@@ -83,8 +77,6 @@ namespace ungula {
       }
       prefs_.remove(NVS_KEY);
       prefs_.end();
-
-      log_info("WiFi config cleared (%s)", ns_);
     }
 
   }  // namespace wifi

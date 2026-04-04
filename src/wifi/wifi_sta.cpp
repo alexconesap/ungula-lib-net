@@ -25,19 +25,13 @@ namespace ungula {
         return false;
       }
 
-      log_info("WiFi STA: connecting to '%s' (timeout %lu ms)", config.ssid,
-               static_cast<unsigned long>(config.connectTimeoutMs));
-
-      // Initiate connection (does not block)
       WiFi.begin(config.ssid, config.password);
 
-      // Poll for connection with timeout
       const uint32_t startMs = TimeControl::millis();
       while ((TimeControl::millis() - startMs) < config.connectTimeoutMs) {
         if (WiFi.status() == WL_CONNECTED) {
-          IPAddress ip = WiFi.localIP();
-          snprintf(s_sta_ip, sizeof(s_sta_ip), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-          log_info("WiFi STA: connected, IP=%s, channel=%d", s_sta_ip, WiFi.channel());
+          IPAddress ipa = WiFi.localIP();
+          snprintf(s_sta_ip, sizeof(s_sta_ip), "%d.%d.%d.%d", ipa[0], ipa[1], ipa[2], ipa[3]);
           return true;
         }
         TimeControl::delay(250);
@@ -51,7 +45,6 @@ namespace ungula {
     void wifi_sta_disconnect() {
       WiFi.disconnect(false);
       std::strncpy(s_sta_ip, "0.0.0.0", sizeof(s_sta_ip));
-      log_info("WiFi STA: disconnected");
     }
 
     bool wifi_sta_is_connected() {
@@ -60,17 +53,21 @@ namespace ungula {
 
     const char* wifi_sta_get_ip() {
       if (WiFi.status() == WL_CONNECTED) {
-        IPAddress ip = WiFi.localIP();
-        snprintf(s_sta_ip, sizeof(s_sta_ip), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+        IPAddress ipa = WiFi.localIP();
+        snprintf(s_sta_ip, sizeof(s_sta_ip), "%d.%d.%d.%d", ipa[0], ipa[1], ipa[2], ipa[3]);
         return s_sta_ip;
       }
       return "0.0.0.0";
     }
 
+    uint8_t wifi_sta_get_channel() {
+      return static_cast<uint8_t>(WiFi.channel());
+    }
+
     /// Check if an SSID matches any of the given prefixes.
     static bool matchesPrefix(const char* ssid, const char* const* prefixes, uint8_t prefixCount) {
       if (prefixes == nullptr || prefixCount == 0) {
-        return true;  // no filter = accept all
+        return true;
       }
       for (uint8_t i = 0; i < prefixCount; ++i) {
         if (prefixes[i] != nullptr &&
@@ -91,10 +88,6 @@ namespace ungula {
         maxResults = WIFI_MAX_SCAN_RESULTS;
       }
 
-      log_info("WiFi STA: scanning networks%s",
-               (prefixes != nullptr && prefixCount > 0) ? " (with prefix filter)" : "");
-
-      // Synchronous scan — use default dwell time per channel for reliable detection
       int16_t found = WiFi.scanNetworks();
       if (found < 0) {
         log_error("WiFi STA: scan failed (error %d)", found);
@@ -102,16 +95,13 @@ namespace ungula {
         return 0;
       }
 
-      log_info("WiFi STA: scan found %d networks total", found);
-
       uint8_t count = 0;
       for (int16_t i = 0; i < found && count < maxResults; ++i) {
-        // Keep the String alive while we use its c_str() pointer
         String ssidStr = WiFi.SSID(i);
         const char* ssid = ssidStr.c_str();
 
         if (ssid[0] == '\0') {
-          continue;  // skip hidden networks
+          continue;
         }
 
         if (!matchesPrefix(ssid, prefixes, prefixCount)) {
@@ -123,17 +113,10 @@ namespace ungula {
         results[count].rssi = static_cast<int8_t>(WiFi.RSSI(i));
         results[count].channel = static_cast<uint8_t>(WiFi.channel(i));
         results[count].encrypted = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
-
-        log_info("WiFi STA:   [%d] '%s' ch=%d rssi=%d %s", count, results[count].ssid,
-                 results[count].channel, results[count].rssi,
-                 results[count].encrypted ? "secured" : "open");
         ++count;
       }
 
       WiFi.scanDelete();
-
-      log_info("WiFi STA: returning %d networks%s", count,
-               (prefixes != nullptr && prefixCount > 0) ? " (after prefix filter)" : "");
       return count;
     }
 

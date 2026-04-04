@@ -63,10 +63,6 @@ namespace ungula {
       }
 
       s_ap_active = true;
-
-      log_info("WiFi AP started: SSID=%s, IP=%s, Channel=%d", config.ssid, s_ip_str,
-               static_cast<int>(s_channel));
-
       return true;
     }
 

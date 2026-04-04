@@ -62,6 +62,10 @@ namespace ungula {
     /// @return IP address string, or "0.0.0.0" if not connected
     const char* wifi_sta_get_ip();
 
+    /// Get the current WiFi channel.
+    /// @return channel number (1-13), or 0 if not available
+    uint8_t wifi_sta_get_channel();
+
     /// Scan for available WiFi networks.
     /// @param results Output array to fill with scan results
     /// @param maxResults Maximum number of results to return (capped at WIFI_MAX_SCAN_RESULTS)
