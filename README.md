@@ -241,6 +241,166 @@ auto result = ungula::http::httpGet("https://api.example.com/ping", 3000);
 
 The body buffer is 1024 bytes. Responses larger than that are silently truncated — no crash, no allocation. This is intentional for embedded use where you typically only need a short JSON response or a status check.
 
+## Pairing (`pairing/`)
+
+### Multi-Channel Pairing for ESP-NOW Networks
+
+The pairing system lets a coordinator (e.g. a central controller) discover and pair with client nodes across multiple WiFi channels. Once paired, the MAC and channel are stored in NVS so they survive reboots.
+
+**Coordinator side** (the device that accepts connections):
+
+```cpp
+#include "pairing/pairing_coordinator.h"
+
+using namespace ungula;
+
+PairingCoordinator pairing(transport, prefs, "pair_ns");
+
+void setup() {
+    pairing.loadPairedClients();
+
+    // When a new node pairs with us
+    pairing.onClientPaired([](const comm::MacAddress& mac, uint8_t deviceId) {
+        log_info("Node %d paired", deviceId);
+    });
+}
+
+void onUserPressedPairButton() {
+    pairing.enablePairing();  // Starts broadcasting beacons
+}
+
+void loop() {
+    pairing.loop(millis());
+}
+
+// In your receive callback:
+void onMessage(const comm::MacAddress& src, const uint8_t* data, uint16_t len) {
+    if (pairing.handleReceived(src, data, len)) return;  // consumed by pairing
+    // ... handle application messages
+}
+```
+
+**Client side** (the device that joins):
+
+```cpp
+#include "pairing/pairing_client.h"
+
+using namespace ungula;
+
+PairingClient pairing(transport, prefs, "pair_ns", MY_DEVICE_ID);
+
+void setup() {
+    uint8_t scanChannels[] = {1, 6, 11};
+    pairing.setScanChannels(scanChannels, 3);
+
+    pairing.onPaired([](const comm::MacAddress& mac, uint8_t ch) {
+        log_info("Paired with coordinator on channel %d", ch);
+    });
+
+    auto stored = pairing.loadStoredPairing();
+    if (!stored.valid) {
+        pairing.startScanning();  // No stored pairing, start looking
+    }
+}
+
+void loop() {
+    pairing.loop(millis());
+}
+```
+
+## Communication (`comm/`)
+
+### Sending and Receiving Messages
+
+`ITransport` is the transport interface. You code against it, and the actual implementation (ESP-NOW, or anything else) is injected at setup time. This means your application logic never depends on a specific radio or protocol.
+
+The ESP-NOW implementation is `EspNowTransport`. Here is a complete example — a coordinator that broadcasts a heartbeat every second and prints anything it receives:
+
+```cpp
+#include <comm/esp_now_transport.h>
+#include <comm/message_header.h>
+
+using namespace ungula::comm;
+
+EspNowTransport transport;
+
+// This runs every time a message arrives
+void onMessage(const MacAddress& src, const uint8_t* data, uint16_t len) {
+    auto header = extractHeader(data, len);
+    Serial.printf("Got message type %d from peer\n", header.messageType);
+}
+
+void setup() {
+    transport.init();
+    transport.setChannel(6);
+    transport.onReceive(onMessage);
+}
+
+void loop() {
+    // Build a heartbeat message
+    uint8_t buf[sizeof(MessageHeader)];
+    MessageHeader hdr = {};
+    hdr.protocolVersion = 1;
+    hdr.messageType = 0x01;  // your app-defined type
+    memcpy(buf, &hdr, sizeof(hdr));
+
+    // Broadcast to all peers on the channel
+    transport.send(MacAddress::broadcast(), buf, sizeof(buf));
+    delay(1000);
+}
+```
+
+For unicast (sending to a specific device), you need to register the peer first:
+
+```cpp
+MacAddress peer = MacAddress::fromBytes(peerMacBytes);
+transport.addPeer(peer, 6);  // channel 6
+
+auto err = transport.send(peer, buf, len);
+if (err != TransportError::OK) {
+    Serial.println("Send failed");
+}
+```
+
+### Writing Your Own Transport
+
+If you need something other than ESP-NOW (BLE, LoRa, serial, a mock for testing), implement `ITransport`:
+
+```cpp
+class MyLoRaTransport : public ungula::comm::ITransport {
+public:
+    TransportError init() override { /* ... */ }
+    TransportError send(const MacAddress& dst, const uint8_t* data, uint16_t len) override { /* ... */ }
+    void onReceive(TransportReceiveCallback cb) override { receiveCb_ = cb; }
+    // ... rest of the interface
+};
+```
+
+Then pass it to your application code the same way. Nothing changes downstream.
+
+### MessageHeader
+
+Every message starts with an 8-byte header. Utility functions let you pull it apart:
+
+```cpp
+auto hdr = extractHeader(data, len);
+const uint8_t* payload = extractPayload(data);
+uint16_t payloadLen = payloadLength(len);
+
+if (!isValidHeader(data, len)) {
+    return;  // too short or corrupt
+}
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `protocolVersion` | `uint8_t` | Protocol version |
+| `messageType` | `uint8_t` | Application-defined type |
+| `sourceDeviceId` | `uint8_t` | Sender device ID |
+| `sequenceNumber` | `uint8_t` | Rolling sequence (0-255) |
+| `flags` | `uint8_t` | Bit 0: requiresAck, Bit 1: isAck |
+| `reserved[3]` | `uint8_t[]` | Must be zero |
+
 ## Testing
 
 The HTTP client has a test suite that runs on desktop (macOS/Linux) using libcurl against real endpoints.
