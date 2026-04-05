@@ -3,6 +3,8 @@
 // See LICENSE file for details.
 
 // WiFi STA (station) — pure ESP-IDF, no Arduino dependency.
+// Auto-reconnect logic modeled after Arduino's WiFi.begin() implementation:
+// on disconnection, automatically retry unless it was a voluntary disconnect.
 
 #include "wifi_sta.h"
 
@@ -22,22 +24,99 @@ namespace ungula {
     static char s_sta_ip[16] = "0.0.0.0";
     static bool s_sta_initialized = false;
 
+    // Event group for blocking connect
+    static EventGroupHandle_t s_wifi_event_group = nullptr;
+    static const int CONNECTED_BIT = BIT0;
+    static const int FAIL_BIT = BIT1;
+
+    // Auto-reconnect state
+    static bool s_connecting = false;          // true while a connect attempt is active
+    static bool s_auto_reconnect = true;       // auto-retry on transient disconnections
+    static bool s_first_connect = false;       // first attempt always gets one retry
+    static bool s_voluntary_disconnect = false; // user called wifi_sta_disconnect()
+
+    /// Check if the disconnect reason is transient (worth retrying).
+    /// Mirrors Arduino's _is_staReconnectableReason().
+    static bool isReconnectableReason(uint8_t reason) {
+      switch (reason) {
+        case WIFI_REASON_AUTH_EXPIRE:         // 2
+        case WIFI_REASON_AUTH_LEAVE:          // 3
+        case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT: // 15
+        case WIFI_REASON_BEACON_TIMEOUT:      // 200
+        case WIFI_REASON_NO_AP_FOUND:         // 201
+        case WIFI_REASON_AUTH_FAIL:           // 202
+        case WIFI_REASON_ASSOC_FAIL:          // 203
+        case WIFI_REASON_HANDSHAKE_TIMEOUT:   // 204
+        case WIFI_REASON_CONNECTION_FAIL:     // 205
+          return true;
+        default:
+          return false;
+      }
+    }
+
+    // Persistent event handler — auto-reconnects on transient disconnections
+    static void wifi_event_handler(void* arg, esp_event_base_t event_base,
+                                   int32_t event_id, void* event_data) {
+      if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        auto* evt = static_cast<wifi_event_sta_disconnected_t*>(event_data);
+        uint8_t reason = evt->reason;
+
+        bool doReconnect = false;
+
+        if (s_voluntary_disconnect) {
+          // User-initiated disconnect — don't reconnect
+          s_voluntary_disconnect = false;
+        } else if (s_first_connect) {
+          // First connection attempt — always retry once (like Arduino)
+          s_first_connect = false;
+          doReconnect = true;
+        } else if (s_auto_reconnect && isReconnectableReason(reason)) {
+          // Transient error — auto-reconnect
+          doReconnect = true;
+        }
+
+        if (doReconnect) {
+          esp_wifi_connect();  // non-blocking retry
+        } else {
+          // No more retries — signal failure to the blocking caller
+          if (s_wifi_event_group) {
+            xEventGroupSetBits(s_wifi_event_group, FAIL_BIT);
+          }
+        }
+      } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        if (s_wifi_event_group) {
+          xEventGroupSetBits(s_wifi_event_group, CONNECTED_BIT);
+        }
+      }
+    }
+
+    static void ensure_event_handler() {
+      if (!s_wifi_event_group) {
+        s_wifi_event_group = xEventGroupCreate();
+      }
+      // Register handlers only once — they persist across connect/disconnect cycles
+      static bool s_registered = false;
+      if (!s_registered) {
+        esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &wifi_event_handler, nullptr);
+        esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, nullptr);
+        s_registered = true;
+      }
+    }
+
     bool wifi_sta_init() {
       if (s_sta_initialized) {
         return true;
       }
 
-      // Initialize TCP/IP stack and event loop
       esp_netif_init();
       esp_event_loop_create_default();
       esp_netif_create_default_wifi_sta();
 
-      // Clean up any leftover state from a previous boot
+      // Clean up leftover state from a previous boot
       esp_wifi_disconnect();
       esp_wifi_stop();
       esp_wifi_deinit();
 
-      // Initialize WiFi
       wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
       esp_err_t err = esp_wifi_init(&cfg);
       if (err != ESP_OK) {
@@ -59,42 +138,11 @@ namespace ungula {
         return false;
       }
 
+      // Register event handlers early — they must be active before any connect
+      ensure_event_handler();
+
       s_sta_initialized = true;
       return true;
-    }
-
-    // Event group for blocking connect
-    static EventGroupHandle_t s_wifi_event_group = nullptr;
-    static const int CONNECTED_BIT = BIT0;
-    static const int FAIL_BIT = BIT1;
-    static bool s_event_handler_registered = false;
-
-    // Event handler for STA connect
-    static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id,
-                                   void* event_data) {
-      if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_wifi_event_group) {
-          xEventGroupSetBits(s_wifi_event_group, FAIL_BIT);
-        }
-      } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        if (s_wifi_event_group) {
-          xEventGroupSetBits(s_wifi_event_group, CONNECTED_BIT);
-        }
-      }
-    }
-
-    static void ensure_event_handler() {
-      if (!s_wifi_event_group) {
-        s_wifi_event_group = xEventGroupCreate();
-      }
-      if (!s_event_handler_registered) {
-        esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &wifi_event_handler,
-                                   nullptr);
-        esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, nullptr);
-        s_event_handler_registered = true;
-      }
-      // Always clear stale bits from a previous session/attempt
-      xEventGroupClearBits(s_wifi_event_group, CONNECTED_BIT | FAIL_BIT);
     }
 
     bool wifi_sta_connect(const WifiStaConfig& config) {
@@ -105,7 +153,7 @@ namespace ungula {
 
       ensure_event_handler();
 
-      // Configure STA
+      // Configure STA credentials
       wifi_config_t sta_cfg = {};
       std::strncpy(reinterpret_cast<char*>(sta_cfg.sta.ssid), config.ssid,
                    sizeof(sta_cfg.sta.ssid) - 1);
@@ -120,45 +168,46 @@ namespace ungula {
         return false;
       }
 
-      // Retry up to 2 times — ESP-IDF STA can fail on the first attempt at boot
-      // if the WiFi stack isn't fully ready yet.
-      static constexpr int MAX_ATTEMPTS = 2;
-      for (int attempt = 0; attempt < MAX_ATTEMPTS; ++attempt) {
-        xEventGroupClearBits(s_wifi_event_group, CONNECTED_BIT | FAIL_BIT);
-        err = esp_wifi_connect();
-        if (err != ESP_OK) {
-          log_error("esp_wifi_connect failed: %s", esp_err_to_name(err));
-          return false;
-        }
+      // Set up auto-reconnect state (like Arduino's first_connect flag)
+      s_first_connect = true;
+      s_voluntary_disconnect = false;
+      s_connecting = true;
 
-        EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, CONNECTED_BIT | FAIL_BIT,
-                                               pdTRUE, pdFALSE,
-                                               pdMS_TO_TICKS(config.connectTimeoutMs));
+      // Clear stale event bits and connect
+      xEventGroupClearBits(s_wifi_event_group, CONNECTED_BIT | FAIL_BIT);
+      err = esp_wifi_connect();
+      if (err != ESP_OK) {
+        log_error("esp_wifi_connect failed: %s", esp_err_to_name(err));
+        s_connecting = false;
+        return false;
+      }
 
-        if (bits & CONNECTED_BIT) {
-          esp_netif_t* sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-          if (sta_netif) {
-            esp_netif_ip_info_t ip_info;
-            if (esp_netif_get_ip_info(sta_netif, &ip_info) == ESP_OK) {
-              snprintf(s_sta_ip, sizeof(s_sta_ip), IPSTR, IP2STR(&ip_info.ip));
-            }
+      // Block until connected or all retries exhausted (event handler auto-retries)
+      EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
+                                              CONNECTED_BIT | FAIL_BIT,
+                                              pdTRUE, pdFALSE,
+                                              pdMS_TO_TICKS(config.connectTimeoutMs));
+
+      s_connecting = false;
+
+      if (bits & CONNECTED_BIT) {
+        esp_netif_t* sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        if (sta_netif) {
+          esp_netif_ip_info_t ip_info;
+          if (esp_netif_get_ip_info(sta_netif, &ip_info) == ESP_OK) {
+            snprintf(s_sta_ip, sizeof(s_sta_ip), IPSTR, IP2STR(&ip_info.ip));
           }
-          return true;
         }
-
-        // First attempt failed — disconnect cleanly and retry
-        esp_wifi_disconnect();
-        if (attempt < MAX_ATTEMPTS - 1) {
-          log_warn("WiFi STA: attempt %d failed, retrying...", attempt + 1);
-          TimeControl::delay(500);
-        }
+        return true;
       }
 
       log_error("WiFi STA: connection to '%s' timed out", config.ssid);
+      esp_wifi_disconnect();
       return false;
     }
 
     void wifi_sta_disconnect() {
+      s_voluntary_disconnect = true;  // prevent auto-reconnect
       esp_wifi_disconnect();
       std::strncpy(s_sta_ip, "0.0.0.0", sizeof(s_sta_ip));
     }
@@ -218,7 +267,6 @@ namespace ungula {
         maxResults = WIFI_MAX_SCAN_RESULTS;
       }
 
-      // Blocking scan
       wifi_scan_config_t scan_cfg = {};
       scan_cfg.show_hidden = false;
       scan_cfg.scan_type = WIFI_SCAN_TYPE_ACTIVE;
