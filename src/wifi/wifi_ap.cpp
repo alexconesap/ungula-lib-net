@@ -70,7 +70,7 @@ namespace ungula {
       // Configure the AP
       wifi_config_t ap_cfg = {};
       std::strncpy(reinterpret_cast<char*>(ap_cfg.ap.ssid), config.ssid, sizeof(ap_cfg.ap.ssid) - 1);
-      if (config.password && config.password[0] != '\0') {
+      if (config.password != nullptr && config.password[0] != '\0') {
         std::strncpy(reinterpret_cast<char*>(ap_cfg.ap.password), config.password,
                      sizeof(ap_cfg.ap.password) - 1);
         ap_cfg.ap.authmode = WIFI_AUTH_WPA2_PSK;
