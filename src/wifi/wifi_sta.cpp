@@ -55,6 +55,32 @@ namespace ungula {
       }
     }
 
+    // Called every time the STA gets an IP (initial connect or auto-reconnect).
+    // Sets the STA as default route and copies DHCP DNS to the global resolver
+    // so getaddrinfo() works in APSTA mode.
+    static void apply_sta_dns_and_route() {
+      esp_netif_t* sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+      if (!sta_netif) return;
+
+      esp_netif_set_default_netif(sta_netif);
+
+      esp_netif_dns_info_t dns;
+      if (esp_netif_get_dns_info(sta_netif, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK &&
+          dns.ip.u_addr.ip4.addr != 0) {
+        ip_addr_t lwip_dns;
+        lwip_dns.type = IPADDR_TYPE_V4;
+        lwip_dns.u_addr.ip4.addr = dns.ip.u_addr.ip4.addr;
+        dns_setserver(0, &lwip_dns);
+      }
+      if (esp_netif_get_dns_info(sta_netif, ESP_NETIF_DNS_BACKUP, &dns) == ESP_OK &&
+          dns.ip.u_addr.ip4.addr != 0) {
+        ip_addr_t lwip_dns;
+        lwip_dns.type = IPADDR_TYPE_V4;
+        lwip_dns.u_addr.ip4.addr = dns.ip.u_addr.ip4.addr;
+        dns_setserver(1, &lwip_dns);
+      }
+    }
+
     // Persistent event handler — auto-reconnects on transient disconnections
     static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                                    int32_t event_id, void* event_data) {
@@ -85,6 +111,10 @@ namespace ungula {
           }
         }
       } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        // Re-apply DNS and default route on every IP assignment (initial
+        // connect AND auto-reconnect). Without this, DNS breaks in APSTA
+        // mode after an auto-reconnect because the AP clears global DNS.
+        apply_sta_dns_and_route();
         if (s_wifi_event_group) {
           xEventGroupSetBits(s_wifi_event_group, CONNECTED_BIT);
         }
@@ -192,31 +222,10 @@ namespace ungula {
       s_connecting = false;
 
       if (bits & CONNECTED_BIT) {
+        // DNS and default route are already applied by the event handler
+        // (IP_EVENT_STA_GOT_IP → apply_sta_dns_and_route). Just read the IP.
         esp_netif_t* sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
         if (sta_netif) {
-          // Set the STA interface as the default route so that internet
-          // traffic goes through STA, not through the local AP.
-          esp_netif_set_default_netif(sta_netif);
-
-          // In APSTA mode the AP's DHCP server may clear the global DNS.
-          // Copy the STA's DHCP-assigned DNS to the global resolver so
-          // that getaddrinfo() can resolve external hostnames.
-          esp_netif_dns_info_t dns;
-          if (esp_netif_get_dns_info(sta_netif, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK &&
-              dns.ip.u_addr.ip4.addr != 0) {
-            ip_addr_t lwip_dns;
-            lwip_dns.type = IPADDR_TYPE_V4;
-            lwip_dns.u_addr.ip4.addr = dns.ip.u_addr.ip4.addr;
-            dns_setserver(0, &lwip_dns);
-          }
-          if (esp_netif_get_dns_info(sta_netif, ESP_NETIF_DNS_BACKUP, &dns) == ESP_OK &&
-              dns.ip.u_addr.ip4.addr != 0) {
-            ip_addr_t lwip_dns;
-            lwip_dns.type = IPADDR_TYPE_V4;
-            lwip_dns.u_addr.ip4.addr = dns.ip.u_addr.ip4.addr;
-            dns_setserver(1, &lwip_dns);
-          }
-
           esp_netif_ip_info_t ip_info;
           if (esp_netif_get_ip_info(sta_netif, &ip_info) == ESP_OK) {
             snprintf(s_sta_ip, sizeof(s_sta_ip), IPSTR, IP2STR(&ip_info.ip));
