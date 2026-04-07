@@ -63,6 +63,11 @@ namespace ungula {
     static uint32_t s_cached_dns_main = 0;
     static uint32_t s_cached_dns_backup = 0;
 
+    // Public DNS used as a last-resort backup when the router's DHCP only
+    // advertises a single DNS server. Easy to find — just grep for
+    // FALLBACK_DNS_BACKUP. Defaults to Google Public DNS (8.8.8.8).
+    static constexpr uint8_t FALLBACK_DNS_BACKUP[4] = { 8, 8, 8, 8 };
+
     // Called every time the STA gets an IP (initial connect or auto-reconnect)
     // and as a recovery step when getaddrinfo() starts failing on a working
     // STA link. Sets the STA as default route and writes the cached DNS
@@ -94,12 +99,20 @@ namespace ungula {
         lwip_dns.u_addr.ip4.addr = s_cached_dns_main;
         dns_setserver(0, &lwip_dns);
       }
+
+      // Backup slot: prefer the DHCP-assigned secondary DNS, but if the
+      // router only advertised one server, fall back to a known public DNS
+      // so we have a real safety net during transient outages.
+      ip_addr_t backup_dns;
+      backup_dns.type = IPADDR_TYPE_V4;
       if (s_cached_dns_backup != 0) {
-        ip_addr_t lwip_dns;
-        lwip_dns.type = IPADDR_TYPE_V4;
-        lwip_dns.u_addr.ip4.addr = s_cached_dns_backup;
-        dns_setserver(1, &lwip_dns);
+        backup_dns.u_addr.ip4.addr = s_cached_dns_backup;
+      } else {
+        IP4_ADDR(&backup_dns.u_addr.ip4,
+                 FALLBACK_DNS_BACKUP[0], FALLBACK_DNS_BACKUP[1],
+                 FALLBACK_DNS_BACKUP[2], FALLBACK_DNS_BACKUP[3]);
       }
+      dns_setserver(1, &backup_dns);
     }
 
     // Persistent event handler — auto-reconnects on transient disconnections
