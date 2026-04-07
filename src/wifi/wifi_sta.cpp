@@ -239,6 +239,10 @@ namespace ungula {
       return false;
     }
 
+    void wifi_sta_refresh_dns() {
+      apply_sta_dns_and_route();
+    }
+
     void wifi_sta_disconnect() {
       s_voluntary_disconnect = true;  // prevent auto-reconnect
       esp_wifi_disconnect();

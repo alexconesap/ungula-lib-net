@@ -72,6 +72,12 @@ namespace ungula {
     /// @return WifiChannel (Ch1-Ch13), or ChAuto if not available
     WifiChannel wifi_sta_get_channel();
 
+    /// Re-apply DNS servers and default route from the STA netif to the
+    /// global lwIP resolver. Useful as a recovery step after DHCP lease
+    /// renewal or when getaddrinfo() starts failing on a working STA link.
+    /// Safe to call from any task; no-op if STA is not connected.
+    void wifi_sta_refresh_dns();
+
     /// Scan for available WiFi networks.
     /// @param results Output array to fill with scan results
     /// @param maxResults Maximum number of results to return (capped at WIFI_MAX_SCAN_RESULTS)
