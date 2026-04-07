@@ -96,6 +96,17 @@ namespace ungula {
       // Small delay to let AP stabilize
       TimeControl::delay(100);
 
+      // Tell the AP's DHCP server to advertise the AP gateway as DNS to its
+      // clients instead of touching lwIP's global DNS resolver. Without this,
+      // ESP-IDF's default DHCPS behavior in APSTA mode can clobber the global
+      // DNS state when activity happens on the AP interface, breaking outbound
+      // getaddrinfo() on the STA side.
+      if (s_ap_netif) {
+        uint8_t dhcps_offer_dns = 1;
+        esp_netif_dhcps_option(s_ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER,
+                               &dhcps_offer_dns, sizeof(dhcps_offer_dns));
+      }
+
       // Read AP IP
       if (s_ap_netif) {
         esp_netif_ip_info_t ip_info;

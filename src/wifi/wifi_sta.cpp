@@ -55,28 +55,49 @@ namespace ungula {
       }
     }
 
-    // Called every time the STA gets an IP (initial connect or auto-reconnect).
-    // Sets the STA as default route and copies DHCP DNS to the global resolver
-    // so getaddrinfo() works in APSTA mode.
+    // Cached DNS servers from the first successful DHCP exchange. We snapshot
+    // them at IP_EVENT_STA_GOT_IP and replay them whenever the global lwIP
+    // resolver needs to be re-asserted (something in the stack — likely the
+    // AP DHCP server or socket activity on the STA interface — clears the
+    // global state silently).
+    static uint32_t s_cached_dns_main = 0;
+    static uint32_t s_cached_dns_backup = 0;
+
+    // Called every time the STA gets an IP (initial connect or auto-reconnect)
+    // and as a recovery step when getaddrinfo() starts failing on a working
+    // STA link. Sets the STA as default route and writes the cached DNS
+    // servers into the global lwIP resolver.
     static void apply_sta_dns_and_route() {
       esp_netif_t* sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
       if (!sta_netif) return;
 
       esp_netif_set_default_netif(sta_netif);
 
-      esp_netif_dns_info_t dns;
-      if (esp_netif_get_dns_info(sta_netif, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK &&
-          dns.ip.u_addr.ip4.addr != 0) {
+      // Snapshot DHCP-assigned DNS the first time we see them.
+      // Once cached, we never overwrite — the router's DNS worked once,
+      // it will keep working.
+      if (s_cached_dns_main == 0) {
+        esp_netif_dns_info_t dns;
+        if (esp_netif_get_dns_info(sta_netif, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK &&
+            dns.ip.u_addr.ip4.addr != 0) {
+          s_cached_dns_main = dns.ip.u_addr.ip4.addr;
+        }
+        if (esp_netif_get_dns_info(sta_netif, ESP_NETIF_DNS_BACKUP, &dns) == ESP_OK &&
+            dns.ip.u_addr.ip4.addr != 0) {
+          s_cached_dns_backup = dns.ip.u_addr.ip4.addr;
+        }
+      }
+
+      if (s_cached_dns_main != 0) {
         ip_addr_t lwip_dns;
         lwip_dns.type = IPADDR_TYPE_V4;
-        lwip_dns.u_addr.ip4.addr = dns.ip.u_addr.ip4.addr;
+        lwip_dns.u_addr.ip4.addr = s_cached_dns_main;
         dns_setserver(0, &lwip_dns);
       }
-      if (esp_netif_get_dns_info(sta_netif, ESP_NETIF_DNS_BACKUP, &dns) == ESP_OK &&
-          dns.ip.u_addr.ip4.addr != 0) {
+      if (s_cached_dns_backup != 0) {
         ip_addr_t lwip_dns;
         lwip_dns.type = IPADDR_TYPE_V4;
-        lwip_dns.u_addr.ip4.addr = dns.ip.u_addr.ip4.addr;
+        lwip_dns.u_addr.ip4.addr = s_cached_dns_backup;
         dns_setserver(1, &lwip_dns);
       }
     }
@@ -241,6 +262,14 @@ namespace ungula {
 
     void wifi_sta_refresh_dns() {
       apply_sta_dns_and_route();
+    }
+
+    uint32_t wifi_sta_get_cached_dns_main() {
+      return s_cached_dns_main;
+    }
+
+    uint32_t wifi_sta_get_cached_dns_backup() {
+      return s_cached_dns_backup;
     }
 
     void wifi_sta_disconnect() {

@@ -78,6 +78,11 @@ namespace ungula {
     /// Safe to call from any task; no-op if STA is not connected.
     void wifi_sta_refresh_dns();
 
+    /// Get the DNS servers cached at first successful STA connection.
+    /// Returned as IPv4 in network byte order. Returns 0 if not cached yet.
+    uint32_t wifi_sta_get_cached_dns_main();
+    uint32_t wifi_sta_get_cached_dns_backup();
+
     /// Scan for available WiFi networks.
     /// @param results Output array to fill with scan results
     /// @param maxResults Maximum number of results to return (capped at WIFI_MAX_SCAN_RESULTS)
