@@ -14,7 +14,7 @@
 #include <lwip/dns.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/event_groups.h>
-#include <logger.h>
+#include <emblogx/logger.h>
 #include <time/time_control.h>
 
 #include <cstring>

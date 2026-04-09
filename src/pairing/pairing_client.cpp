@@ -6,7 +6,7 @@
 
 #include <cstring>
 
-#include <logger.h>
+#include <emblogx/logger.h>
 
 namespace ungula {
   namespace pairing {

@@ -3,7 +3,7 @@
 
 #include "connection_manager.h"
 
-#include <logger.h>
+#include <emblogx/logger.h>
 
 namespace ungula {
 

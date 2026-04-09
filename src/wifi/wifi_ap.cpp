@@ -9,7 +9,7 @@
 #include <esp_event.h>
 #include <esp_netif.h>
 #include <esp_wifi.h>
-#include <logger.h>
+#include <emblogx/logger.h>
 #include <time/time_control.h>
 
 #include <cstring>

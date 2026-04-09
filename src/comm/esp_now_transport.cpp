@@ -7,7 +7,7 @@
 #include <esp_now.h>
 #include <esp_wifi.h>
 
-#include <logger.h>
+#include <emblogx/logger.h>
 
 namespace ungula {
   namespace comm {

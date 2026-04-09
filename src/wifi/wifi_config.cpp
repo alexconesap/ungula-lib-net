@@ -9,7 +9,7 @@
 
 #include "wifi_config.h"
 
-#include <logger.h>
+#include <emblogx/logger.h>
 #include <util/crc32.h>
 
 #include <cstring>
