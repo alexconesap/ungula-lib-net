@@ -1,6 +1,6 @@
 # UngulaNetLib
 
-Networking library for ESP32 projects. WiFi AP management, HTTP+WebSocket server, and HTTP client — all built on ESP-IDF, no Arduino networking dependencies.
+Networking library for ESP32 projects. WiFi AP management, HTTP+WebSocket server, HTTP client, and NTP time synchronisation — all built on ESP-IDF, no Arduino networking dependencies.
 
 The library compiles all components when `ESP_PLATFORM` is defined. The host project controls what it uses through its own `#include` directives and project-level guards — the library does not impose feature flags.
 
@@ -401,6 +401,61 @@ if (!isValidHeader(data, len)) {
 | `flags` | `uint8_t` | Bit 0: requiresAck, Bit 1: isAck |
 | `reserved[3]` | `uint8_t[]` | Must be zero |
 
+## NTP Time Synchronisation
+
+*Requires `-DESP_PLATFORM`*
+
+Synchronise the device clock with an NTP server. Uses the ESP-IDF SNTP service under the hood — once synced, the standard POSIX `time()` returns real wall-clock time and the service keeps it updated in the background.
+
+This replaces the Arduino `NTPClient` + `WiFiUdp` pattern with a zero-dependency ESP-IDF implementation.
+
+### Basic usage
+
+```cpp
+#include <ntp/ntp_client.h>
+
+using namespace ungula::ntp;
+
+void setup() {
+    wifi_sta_connect(staConfig);
+
+    ntp_init();  // uses pool.ntp.org, UTC, 1 h re-sync
+}
+
+void loop() {
+    if (ntp_is_synced()) {
+        char buf[20];
+        ntp_format_local(buf, sizeof(buf));
+        log_info("Time: %s", buf);  // "2026-04-09 14:30:00"
+    }
+}
+```
+
+### Custom configuration
+
+```cpp
+NtpConfig cfg;
+cfg.server           = "time.nist.gov";
+cfg.fallbackServer   = "time.google.com";
+cfg.utcOffsetSeconds = -5 * 3600;  // US Eastern (UTC-5)
+cfg.syncIntervalSec  = 1800;       // re-sync every 30 min
+
+ntp_init(cfg);
+```
+
+### API
+
+| Function | Returns | Description |
+| --- | --- | --- |
+| `ntp_init(config)` | `void` | Start SNTP service. Safe to call more than once |
+| `ntp_stop()` | `void` | Stop the SNTP service |
+| `ntp_is_synced()` | `bool` | True once the clock has been set by NTP |
+| `ntp_epoch()` | `time_t` | Current UTC epoch (0 if not synced) |
+| `ntp_local_epoch()` | `time_t` | UTC epoch + configured offset (0 if not synced) |
+| `ntp_format_local(buf, size)` | `size_t` | Format local time as `YYYY-MM-DD HH:MM:SS` |
+
+WiFi STA must be connected before calling `ntp_init()` so the DNS resolver can reach the NTP server. On desktop hosts the functions are stubbed (always returns not synced).
+
 ## Testing
 
 The HTTP client has a test suite that runs on desktop (macOS/Linux) using libcurl against real endpoints.
@@ -436,14 +491,25 @@ cd tests
 
 ## Dependencies
 
-Requires [UngulaGenericLib](https://github.com/alexconesap/ungula-lib.git) (`lib/`) for the logger and `WifiChannel` enum.
+| Library | Repo | Used for |
+| ------- | ---- | -------- |
+| UngulaGenericLib | [ungula-lib](https://github.com/alexconesap/ungula-lib.git) | `WifiChannel` enum, platform abstractions |
+| embLogX | [emblogx](https://github.com/alexconesap/emblogx.git) | Logging via `log_error()` / `log_warn()` |
+
+ESP-IDF component dependencies (part of the SDK, no extra components needed):
+
+- **esp_wifi** — WiFi AP/STA
+- **esp_http_client** — HTTP client
+- **esp_http_server** — HTTP+WebSocket server
+- **esp_sntp** — NTP time synchronisation
+
+For local development, keep the libraries as siblings:
 
 ```text
-your_project/
-  lib/          <- UngulaGenericLib
-  lib_net/      <- this library
-  src/
-    main.ino
+your_workspace/
+  lib/            <- UngulaGenericLib
+  lib_emblogx/    <- embLogX
+  lib_net/        <- this library
 ```
 
 ## License

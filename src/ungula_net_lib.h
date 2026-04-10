@@ -32,3 +32,6 @@
 // HTTP server and client
 #include "http/http_client.h"
 #include "http/http_server.h"
+
+// NTP time synchronisation
+#include "ntp/ntp_client.h"
