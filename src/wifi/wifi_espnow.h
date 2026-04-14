@@ -16,7 +16,7 @@
  *   #include <wifi/wifi_espnow.h>
  *
  *   void setup() {
- *     if (!ungula::wifi::wifi_espnow_init()) {
+ *     if (!ungula::wifi::espnow_init()) {
  *       // handle error
  *     }
  *     // ESP-NOW transport is now ready to use
@@ -31,7 +31,7 @@ namespace ungula {
     /// Sets up WiFi in STA mode — the minimum required for ESP-NOW.
     /// No AP is started, no HTTP server, no web UI.
     /// @return true on success
-    bool wifi_espnow_init();
+    bool espnow_init();
 
   }  // namespace wifi
 }  // namespace ungula

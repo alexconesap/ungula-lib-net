@@ -23,11 +23,12 @@ namespace ungula {
     static esp_netif_t* s_sta_netif = nullptr;
     static char s_ip_str[16] = "0.0.0.0";
     static char s_sta_ip_str[16] = "0.0.0.0";
-    static char s_mac_str[18] = "00:00:00:00:00:00";
+    static char s_ap_mac_str[18] = "00:00:00:00:00:00";
+    static char s_sta_mac_str[18] = "00:00:00:00:00:00";
     static WifiChannel s_channel = WifiChannel::ChAuto;
     static WifiChannel read_effective_wifi_channel();
 
-    bool wifi_ap_init(const WifiApConfig& config) {
+    bool ap_init(const WifiApConfig& config) {
       if (s_ap_active) {
         log_warn("WiFi AP already initialized");
         return true;
@@ -134,11 +135,11 @@ namespace ungula {
       return true;
     }
 
-    const char* wifi_ap_get_ip() {
+    const char* ap_get_ip() {
       return s_ip_str;
     }
 
-    const char* wifi_ap_get_sta_ip() {
+    const char* ap_get_sta_ip() {
       if (s_sta_netif) {
         esp_netif_ip_info_t ip_info;
         if (esp_netif_get_ip_info(s_sta_netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
@@ -149,7 +150,7 @@ namespace ungula {
       return "0.0.0.0";
     }
 
-    bool wifi_ap_sta_connected() {
+    bool ap_sta_connected() {
       if (!s_sta_netif) {
         return false;
       }
@@ -160,20 +161,29 @@ namespace ungula {
       return ip_info.ip.addr != 0;
     }
 
-    const char* wifi_ap_get_mac() {
+    const char* ap_get_mac() {
       uint8_t mac[6];
-      if (esp_wifi_get_mac(WIFI_IF_STA, mac) == ESP_OK) {
-        snprintf(s_mac_str, sizeof(s_mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+      if (esp_wifi_get_mac(WIFI_IF_AP, mac) == ESP_OK) {
+        snprintf(s_ap_mac_str, sizeof(s_ap_mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
       }
-      return s_mac_str;
+      return s_ap_mac_str;
     }
 
-    bool wifi_ap_is_active() {
+    const char* sta_get_mac() {
+      uint8_t mac[6];
+      if (esp_wifi_get_mac(WIFI_IF_STA, mac) == ESP_OK) {
+        snprintf(s_sta_mac_str, sizeof(s_sta_mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+      }
+      return s_sta_mac_str;
+    }
+
+    bool ap_is_active() {
       return s_ap_active;
     }
 
-    WifiChannel wifi_ap_get_channel() {
+    WifiChannel ap_get_channel() {
       return s_channel;
     }
 

@@ -24,31 +24,35 @@ namespace ungula {
     /// Initialize WiFi in AP+STA mode
     /// @param config AP configuration
     /// @return true on success
-    bool wifi_ap_init(const WifiApConfig& config = WifiApConfig());
+    bool ap_init(const WifiApConfig& config = WifiApConfig());
 
     /// Get the AP IP address as string
     /// @return IP address string (e.g., "192.168.4.1")
-    const char* wifi_ap_get_ip();
+    const char* ap_get_ip();
 
     /// Get the STA IP address as string (when connected to external WiFi)
     /// @return IP address string, or "0.0.0.0" if not connected
-    const char* wifi_ap_get_sta_ip();
+    const char* ap_get_sta_ip();
 
     /// Check if the STA interface is connected to an external WiFi network
     /// @return true if STA is connected
-    bool wifi_ap_sta_connected();
+    bool ap_sta_connected();
 
-    /// Get the device MAC address as string
+    /// Get the AP interface MAC address as string
     /// @return MAC address string (e.g., "AA:BB:CC:DD:EE:FF")
-    const char* wifi_ap_get_mac();
+    const char* ap_get_mac();
+
+    /// Get the STA interface MAC address as string
+    /// @return MAC address string (e.g., "AA:BB:CC:DD:EE:FF")
+    const char* sta_get_mac();
 
     /// Check if AP is active
     /// @return true if AP is running
-    bool wifi_ap_is_active();
+    bool ap_is_active();
 
     /// Get the current WiFi channel
     /// @return channel number
-    WifiChannel wifi_ap_get_channel();
+    WifiChannel ap_get_channel();
 
   }  // namespace wifi
 }  // namespace ungula

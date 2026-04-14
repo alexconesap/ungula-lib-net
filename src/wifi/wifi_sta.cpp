@@ -34,7 +34,7 @@ namespace ungula {
     static bool s_connecting = false;          // true while a connect attempt is active
     static bool s_auto_reconnect = true;       // auto-retry on transient disconnections
     static bool s_first_connect = false;       // first attempt always gets one retry
-    static bool s_voluntary_disconnect = false; // user called wifi_sta_disconnect()
+    static bool s_voluntary_disconnect = false; // user called sta_disconnect()
 
     /// Check if the disconnect reason is transient (worth retrying).
     /// Mirrors Arduino's _is_staReconnectableReason().
@@ -168,7 +168,7 @@ namespace ungula {
       }
     }
 
-    bool wifi_sta_init() {
+    bool sta_init() {
       if (s_sta_initialized) {
         return true;
       }
@@ -210,7 +210,7 @@ namespace ungula {
       return true;
     }
 
-    bool wifi_sta_connect(const WifiStaConfig& config) {
+    bool sta_connect(const WifiStaConfig& config) {
       if (config.ssid == nullptr || config.ssid[0] == '\0') {
         log_error("WiFi STA: no SSID provided");
         return false;
@@ -273,25 +273,25 @@ namespace ungula {
       return false;
     }
 
-    void wifi_sta_refresh_dns() {
+    void sta_refresh_dns() {
       apply_sta_dns_and_route();
     }
 
-    uint32_t wifi_sta_get_cached_dns_main() {
+    uint32_t sta_get_cached_dns_main() {
       return s_cached_dns_main;
     }
 
-    uint32_t wifi_sta_get_cached_dns_backup() {
+    uint32_t sta_get_cached_dns_backup() {
       return s_cached_dns_backup;
     }
 
-    void wifi_sta_disconnect() {
+    void sta_disconnect() {
       s_voluntary_disconnect = true;  // prevent auto-reconnect
       esp_wifi_disconnect();
       std::strncpy(s_sta_ip, "0.0.0.0", sizeof(s_sta_ip));
     }
 
-    bool wifi_sta_is_connected() {
+    bool sta_is_connected() {
       esp_netif_t* sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
       if (!sta_netif) {
         return false;
@@ -303,7 +303,7 @@ namespace ungula {
       return ip_info.ip.addr != 0;
     }
 
-    const char* wifi_sta_get_ip() {
+    const char* sta_get_ip() {
       esp_netif_t* sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
       if (sta_netif) {
         esp_netif_ip_info_t ip_info;
@@ -315,7 +315,7 @@ namespace ungula {
       return "0.0.0.0";
     }
 
-    WifiChannel wifi_sta_get_channel() {
+    WifiChannel sta_get_channel() {
       uint8_t primary = 0;
       wifi_second_chan_t second = WIFI_SECOND_CHAN_NONE;
       esp_wifi_get_channel(&primary, &second);
@@ -336,8 +336,8 @@ namespace ungula {
       return false;
     }
 
-    uint8_t wifi_sta_scan(WifiScanResult* results, uint8_t maxResults, const char* const* prefixes,
-                          uint8_t prefixCount) {
+    uint8_t sta_scan(WifiScanResult* results, uint8_t maxResults, const char* const* prefixes,
+                     uint8_t prefixCount) {
       if (results == nullptr || maxResults == 0) {
         return 0;
       }

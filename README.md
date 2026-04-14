@@ -32,21 +32,21 @@ config.password       = "secret123";
 config.channel        = WifiChannel::Ch6;
 config.maxConnections = 4;
 
-if (wifi_ap_init(config)) {
-    log_info("AP ready at %s", wifi_ap_get_ip());  // "192.168.4.1"
+if (ap_init(config)) {
+    log_info("AP ready at %s", ap_get_ip());  // "192.168.4.1"
 }
 ```
 
 | Function | Returns | Description |
 | --- | --- | --- |
-| `wifi_ap_init(config)` | `bool` | Initialize WiFi AP+STA mode |
-| `wifi_ap_get_ip()` | `const char*` | AP IP address |
-| `wifi_ap_is_active()` | `bool` | Whether AP is running |
-| `wifi_ap_get_channel()` | `WifiChannel` | Effective channel in use |
+| `ap_init(config)` | `bool` | Initialize WiFi AP+STA mode |
+| `ap_get_ip()` | `const char*` | AP IP address |
+| `ap_is_active()` | `bool` | Whether AP is running |
+| `ap_get_channel()` | `WifiChannel` | Effective channel in use |
 
 ## ESP-NOW Initialization
 
-For nodes that only need ESP-NOW (no web server, no AP), use `wifi_espnow_init()` to bring up the WiFi radio in STA mode -- the minimum required for ESP-NOW to work.
+For nodes that only need ESP-NOW (no web server, no AP), use `espnow_init()` to bring up the WiFi radio in STA mode -- the minimum required for ESP-NOW to work.
 
 ```cpp
 #include <wifi/wifi_espnow.h>
@@ -54,7 +54,7 @@ For nodes that only need ESP-NOW (no web server, no AP), use `wifi_espnow_init()
 using namespace ungula::wifi;
 
 void setup() {
-    if (!wifi_espnow_init()) {
+    if (!espnow_init()) {
         // handle error
     }
     // ESP-NOW transport is now ready to use
@@ -63,7 +63,7 @@ void setup() {
 
 | Function | Returns | Description |
 | --- | --- | --- |
-| `wifi_espnow_init()` | `bool` | Initialize WiFi in STA mode for ESP-NOW only |
+| `espnow_init()` | `bool` | Initialize WiFi in STA mode for ESP-NOW only |
 
 No AP is started, no HTTP server, no web UI. This is the right choice for headless nodes that communicate exclusively via ESP-NOW.
 
@@ -81,7 +81,7 @@ A unified HTTP and WebSocket server built on ESP-IDF `httpd`. One server, one po
 ungula::http::HttpServer server;
 
 void setup() {
-    wifi_ap_init(apConfig);
+    ap_init(apConfig);
 
     server.start(80);
     server.enableWebSocket("/ws");
@@ -417,7 +417,7 @@ This replaces the Arduino `NTPClient` + `WiFiUdp` pattern with a zero-dependency
 using namespace ungula::ntp;
 
 void setup() {
-    wifi_sta_connect(staConfig);
+    sta_connect(staConfig);
 
     ntp_init();  // uses pool.ntp.org, UTC, 1 h re-sync
 }

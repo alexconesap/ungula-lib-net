@@ -45,43 +45,43 @@ namespace ungula {
     static constexpr uint8_t WIFI_MAX_SCAN_RESULTS = 16;
 
     /// Initialize WiFi in STA-only mode (no AP).
-    /// Call this instead of wifi_ap_init() for nodes that don't serve a web UI
+    /// Call this instead of ap_init() for nodes that don't serve a web UI
     /// but still need ESP-NOW and optional STA connectivity.
     /// @return true on success
-    bool wifi_sta_init();
+    bool sta_init();
 
     /// Connect STA interface to an external WiFi router.
     /// Blocks until connected and IP obtained, or timeout.
     /// @param config Connection parameters (SSID, password, timeout)
     /// @return true if connected with valid IP within timeout
-    bool wifi_sta_connect(const WifiStaConfig& config);
+    bool sta_connect(const WifiStaConfig& config);
 
     /// Disconnect STA from the external router.
     /// After disconnecting, the WiFi channel may revert to the AP's configured channel.
-    void wifi_sta_disconnect();
+    void sta_disconnect();
 
     /// Check if STA is connected to an external router (has valid IP).
     /// @return true if connected
-    bool wifi_sta_is_connected();
+    bool sta_is_connected();
 
     /// Get the STA IP address as string.
     /// @return IP address string, or "0.0.0.0" if not connected
-    const char* wifi_sta_get_ip();
+    const char* sta_get_ip();
 
     /// Get the current WiFi channel.
     /// @return WifiChannel (Ch1-Ch13), or ChAuto if not available
-    WifiChannel wifi_sta_get_channel();
+    WifiChannel sta_get_channel();
 
     /// Re-apply DNS servers and default route from the STA netif to the
     /// global lwIP resolver. Useful as a recovery step after DHCP lease
     /// renewal or when getaddrinfo() starts failing on a working STA link.
     /// Safe to call from any task; no-op if STA is not connected.
-    void wifi_sta_refresh_dns();
+    void sta_refresh_dns();
 
     /// Get the DNS servers cached at first successful STA connection.
     /// Returned as IPv4 in network byte order. Returns 0 if not cached yet.
-    uint32_t wifi_sta_get_cached_dns_main();
-    uint32_t wifi_sta_get_cached_dns_backup();
+    uint32_t sta_get_cached_dns_main();
+    uint32_t sta_get_cached_dns_backup();
 
     /// Scan for available WiFi networks.
     /// @param results Output array to fill with scan results
@@ -89,8 +89,8 @@ namespace ungula {
     /// @param prefixes Optional array of SSID prefix strings for filtering (nullptr = no filter)
     /// @param prefixCount Number of prefix strings in the array
     /// @return Number of networks found (and stored in results)
-    uint8_t wifi_sta_scan(WifiScanResult* results, uint8_t maxResults,
-                          const char* const* prefixes = nullptr, uint8_t prefixCount = 0);
+    uint8_t sta_scan(WifiScanResult* results, uint8_t maxResults,
+                     const char* const* prefixes = nullptr, uint8_t prefixCount = 0);
 
   }  // namespace wifi
 }  // namespace ungula
